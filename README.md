@@ -21,6 +21,16 @@ Current defaults are tuned for quicker repro:
 - `CONCURRENCY=128`
 - `CHUNK_BYTES=16384`
 
+## Repro environment
+
+Current confirmed repro environment:
+
+- Bun: `1.3.11`
+- OS: `macOS`
+- Arch: `arm64`
+
+The script also prints Bun version and platform info at startup.
+
 ## Expected
 
 Process exits cleanly without internal Bun stream errors.
@@ -45,7 +55,7 @@ Under sustained repetition, this bad stream state appears to accumulate and even
 
 ## Tunables
 
-Edit constants at top of `repro.ts`:
+Override via environment variables:
 
 - `REQUESTS`
 - `CONCURRENCY`

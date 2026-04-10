@@ -64,6 +64,7 @@ process.on("uncaughtException", (error) => {
 });
 
 const startedAt = Date.now();
+log(`bun=${Bun.version} platform=${process.platform} arch=${process.arch}`);
 log(`upstream http://127.0.0.1:${upstreamPort}/upstream`);
 log(`consumer http://127.0.0.1:${consumerPort}/proxy`);
 log(
