@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "repro": "bun repro.ts"
+    "repro": "bun repro.ts",
+    "repro:direct": "bun repro-direct.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

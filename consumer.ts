@@ -18,6 +18,54 @@ const ABORT_AFTER_CHUNKS = readNumberEnv("ABORT_AFTER_CHUNKS", 2);
 const ABORT_RATIO = readNumberEnv("ABORT_RATIO", 0.98);
 const FETCH_TIMEOUT_MS = readNumberEnv("FETCH_TIMEOUT_MS", 60_000);
 
+const fetchTeeBranch = async (
+  upstreamPort: number,
+  search: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const upstreamUrl = new URL(`http://127.0.0.1:${upstreamPort}/upstream`);
+  upstreamUrl.search = search;
+
+  const res = await fetch(upstreamUrl, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.body) {
+    throw new Error("missing upstream response body");
+  }
+
+  const [clientStream, analyticsStream] = res.body.tee();
+  const analyticsReader = analyticsStream.getReader();
+
+  void (async () => {
+    const decoder = new TextDecoder();
+
+    try {
+      while (true) {
+        const { done, value } = await analyticsReader.read();
+        if (done) {
+          decoder.decode();
+          return;
+        }
+
+        if (!value) {
+          continue;
+        }
+
+        decoder.decode(value, { stream: true });
+      }
+    } catch (error) {
+      console.error("[repro-bun-tee] analytics reader failed", error);
+    } finally {
+      try {
+        analyticsReader.releaseLock();
+      } catch {
+        // noop
+      }
+    }
+  })();
+
+  return clientStream;
+};
+
 export const createConsumerServer = (upstreamPort: number) => {
   return Bun.serve({
     port: 0,
@@ -29,54 +77,41 @@ export const createConsumerServer = (upstreamPort: number) => {
         return new Response("not found", { status: 404 });
       }
 
-      const upstreamUrl = new URL(`http://127.0.0.1:${upstreamPort}/upstream`);
-      upstreamUrl.search = url.search;
-
-      const res = await fetch(upstreamUrl, {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (!res.body) {
-        return new Response("missing body", { status: 502 });
-      }
-
-      const [clientStream, analyticsStream] = res.body.tee();
-      const analyticsReader = analyticsStream.getReader();
-
-      void (async () => {
-        const decoder = new TextDecoder();
-
-        try {
-          while (true) {
-            const { done, value } = await analyticsReader.read();
-            if (done) {
-              decoder.decode();
-              return;
-            }
-
-            if (!value) {
-              continue;
-            }
-
-            decoder.decode(value, { stream: true });
-          }
-        } catch (error) {
-          console.error("[repro-bun-tee] analytics reader failed", error);
-        } finally {
-          try {
-            analyticsReader.releaseLock();
-          } catch {
-            // noop
-          }
-        }
-      })();
-
-      return new Response(clientStream, {
-        status: res.status,
-        statusText: res.statusText,
-        headers: res.headers,
-      });
+      const clientStream = await fetchTeeBranch(upstreamPort, url.search);
+      return new Response(clientStream);
     },
   });
+};
+
+const readDirectRequest = async (
+  upstreamPort: number,
+  id: number,
+): Promise<void> => {
+  const shouldAbort = id / REQUESTS < ABORT_RATIO;
+  const clientStream = await fetchTeeBranch(upstreamPort, `?id=${id}`);
+  const reader = clientStream.getReader();
+  let count = 0;
+
+  try {
+    while (true) {
+      const { done } = await reader.read();
+      if (done) {
+        return;
+      }
+
+      count += 1;
+      if (shouldAbort && count >= ABORT_AFTER_CHUNKS) {
+        await reader.cancel(new Error(`intentional cancel ${id}`));
+        return;
+      }
+    }
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // noop
+    }
+  }
 };
 
 const runRequest = async (consumerPort: number, id: number): Promise<void> => {
@@ -150,6 +185,25 @@ export const runLoad = async (consumerPort: number): Promise<void> => {
   await Promise.all(
     Array.from({ length: CONCURRENCY }, (_, workerId) =>
       runWorker(consumerPort, workerId, requestsPerWorker),
+    ),
+  );
+};
+
+export const runDirectLoad = async (upstreamPort: number): Promise<void> => {
+  const requestsPerWorker = Math.ceil(REQUESTS / CONCURRENCY);
+
+  await Promise.all(
+    Array.from({ length: CONCURRENCY }, (_, workerId) =>
+      (async () => {
+        for (let i = 0; i < requestsPerWorker; i += 1) {
+          const requestId = workerId * requestsPerWorker + i;
+          if (requestId >= REQUESTS) {
+            return;
+          }
+
+          await readDirectRequest(upstreamPort, requestId);
+        }
+      })(),
     ),
   );
 };

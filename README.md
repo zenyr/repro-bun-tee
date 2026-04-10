@@ -3,7 +3,7 @@
 Minimal Bun repro for stream state corruption under:
 
 - upstream async-iterable SSE response in a separate Bun process
-- consumer-side proxy `fetch()`
+- consumer-side proxy `fetch()` via `Bun.serve`
 - `response.body.tee()`
 - background `getReader().read()` consumption
 - client-side abort/cancel under heavy load
@@ -41,6 +41,21 @@ The key problem is not just the intermediate `TypeError`.
 
 Under sustained repetition, this bad stream state appears to accumulate and eventually leads to a Bun segfault in larger real-world workloads on macOS arm64.
 
+## Key insight
+
+In my environment, the failure currently reproduces when the tee'd stream is passed back through a `Bun.serve` response path.
+
+I also tried a direct client-only variant with:
+
+- upstream `fetch()`
+- `response.body.tee()`
+- one branch consumed in the background
+- the other branch partially consumed and then cancelled
+
+That direct variant did **not** reproduce the failure for me.
+
+So the current evidence suggests this is not just a generic `tee() + cancel()` issue. The `Bun.serve` response streaming path appears to be an important part of the repro.
+
 ## Observed on affected Bun builds
 
 - repeated `InvalidHTTPResponse` while consumer fetches upstream
@@ -64,3 +79,10 @@ Override via environment variables:
 - `CHUNK_INTERVAL_MS`
 - `ABORT_AFTER_CHUNKS`
 - `ABORT_RATIO`
+
+## Variants
+
+- `bun run repro`
+  - main repro, includes `Bun.serve` response streaming path
+- `bun run repro:direct`
+  - direct client-only variant, did not reproduce in my environment
