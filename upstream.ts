@@ -1,6 +1,20 @@
-export const CHUNKS = 256;
-export const CHUNK_BYTES = 256 * 1024;
-export const CHUNK_INTERVAL_MS = 0;
+const readNumberEnv = (name: string, fallback: number): number => {
+  const value = Bun.env[name];
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`invalid env ${name}=${value}`);
+  }
+
+  return parsed;
+};
+
+export const CHUNKS = readNumberEnv("CHUNKS", 256);
+export const CHUNK_BYTES = readNumberEnv("CHUNK_BYTES", 16 * 1024);
+export const CHUNK_INTERVAL_MS = readNumberEnv("CHUNK_INTERVAL_MS", 0);
 
 const encoder = new TextEncoder();
 

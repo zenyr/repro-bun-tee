@@ -1,8 +1,22 @@
-const REQUESTS = 1500;
-const CONCURRENCY = 96;
-const ABORT_AFTER_CHUNKS = 2;
-const ABORT_RATIO = 0.98;
-const FETCH_TIMEOUT_MS = 60_000;
+const readNumberEnv = (name: string, fallback: number): number => {
+  const value = Bun.env[name];
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`invalid env ${name}=${value}`);
+  }
+
+  return parsed;
+};
+
+const REQUESTS = readNumberEnv("REQUESTS", 500);
+const CONCURRENCY = readNumberEnv("CONCURRENCY", 128);
+const ABORT_AFTER_CHUNKS = readNumberEnv("ABORT_AFTER_CHUNKS", 2);
+const ABORT_RATIO = readNumberEnv("ABORT_RATIO", 0.98);
+const FETCH_TIMEOUT_MS = readNumberEnv("FETCH_TIMEOUT_MS", 60_000);
 
 export const createConsumerServer = (upstreamPort: number) => {
   return Bun.serve({

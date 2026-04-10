@@ -15,6 +15,12 @@ bun install
 bun run repro
 ```
 
+Current defaults are tuned for quicker repro:
+
+- `REQUESTS=500`
+- `CONCURRENCY=128`
+- `CHUNK_BYTES=16384`
+
 ## Expected
 
 Process exits cleanly without internal Bun stream errors.
