@@ -18,10 +18,14 @@ const ABORT_AFTER_CHUNKS = readNumberEnv("ABORT_AFTER_CHUNKS", 2);
 const ABORT_RATIO = readNumberEnv("ABORT_RATIO", 0.98);
 const FETCH_TIMEOUT_MS = readNumberEnv("FETCH_TIMEOUT_MS", 60_000);
 
-const fetchTeeBranch = async (
+type TeePlan = {
+  response: Response;
+};
+
+const buildTeePlan = async (
   upstreamPort: number,
   search: string,
-): Promise<ReadableStream<Uint8Array>> => {
+): Promise<TeePlan> => {
   const upstreamUrl = new URL(`http://127.0.0.1:${upstreamPort}/upstream`);
   upstreamUrl.search = search;
 
@@ -63,7 +67,13 @@ const fetchTeeBranch = async (
     }
   })();
 
-  return clientStream;
+  return {
+    response: new Response(clientStream, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
+    }),
+  };
 };
 
 export const createConsumerServer = (upstreamPort: number) => {
@@ -77,8 +87,8 @@ export const createConsumerServer = (upstreamPort: number) => {
         return new Response("not found", { status: 404 });
       }
 
-      const clientStream = await fetchTeeBranch(upstreamPort, url.search);
-      return new Response(clientStream);
+      const plan = await buildTeePlan(upstreamPort, url.search);
+      return plan.response;
     },
   });
 };
@@ -88,8 +98,13 @@ const readDirectRequest = async (
   id: number,
 ): Promise<void> => {
   const shouldAbort = id / REQUESTS < ABORT_RATIO;
-  const clientStream = await fetchTeeBranch(upstreamPort, `?id=${id}`);
-  const reader = clientStream.getReader();
+  const plan = await buildTeePlan(upstreamPort, `?id=${id}`);
+  const responseBody = plan.response.body;
+  if (!responseBody) {
+    throw new Error(`missing direct response body for request ${id}`);
+  }
+
+  const reader = responseBody.getReader();
   let count = 0;
 
   try {
