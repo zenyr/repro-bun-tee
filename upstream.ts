@@ -109,6 +109,14 @@ export const createUpstreamServer = () => {
 };
 
 if (import.meta.main) {
+  process.on("unhandledRejection", (error) => {
+    console.error("[repro-bun-tee upstream] unhandledRejection", error);
+  });
+
+  process.on("uncaughtException", (error) => {
+    console.error("[repro-bun-tee upstream] uncaughtException", error);
+  });
+
   const server = createUpstreamServer();
   const port = server.port;
   if (port === undefined) {
