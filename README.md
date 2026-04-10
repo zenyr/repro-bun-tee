@@ -33,7 +33,7 @@ Current defaults are tuned for quicker repro:
 
 Current confirmed repro environment:
 
-- Bun: `1.3.11`
+- Bun: `1.3.11`, `1.3.12`
 - OS: `macOS`
 - Arch: `arm64`
 
