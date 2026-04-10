@@ -11,9 +11,17 @@ Minimal Bun repro for stream state corruption under:
 ## Run
 
 ```bash
-bun install
 bun run repro
 ```
+
+`bun install` is optional here because this repro has no runtime dependencies.
+
+Variants:
+
+- `bun run repro`
+  - main repro, includes `Bun.serve` response streaming path
+- `bun run repro:direct`
+  - direct client-only variant, did not reproduce in my environment
 
 Current defaults are tuned for quicker repro:
 
@@ -54,14 +62,20 @@ I also tried a direct client-only variant with:
 
 That direct variant did **not** reproduce the failure for me.
 
+After refactoring the code so that both variants share the tee/build-response path as much as possible, the behavior still differs:
+
+- `bun run repro`: reproduced `TypeError: null is not an object` in `4/5` sequential runs
+- `bun run repro:direct`: reproduced in `0/5` sequential runs
+
 So the current evidence suggests this is not just a generic `tee() + cancel()` issue. The `Bun.serve` response streaming path appears to be an important part of the repro.
 
-## Observed on affected Bun builds
+## Observed in current default repro
 
-- repeated `InvalidHTTPResponse` while consumer fetches upstream
-- repeated `TypeError: null is not an object`
-- occasional `Bun.serve` timeout/hang symptoms
-- in larger real-world workloads, eventual segfault on macOS arm64 after this kind of state corruption repeats
+- `TypeError: null is not an object`
+
+## Related real-world observation
+
+In a larger real-world workload on macOS arm64, this same general stream corruption pattern eventually coincided with Bun segfaults. That segfault is **not** part of the current default repro; the current repro is focused on the earlier deterministic-ish failure signal above.
 
 ## Notes
 
@@ -79,10 +93,3 @@ Override via environment variables:
 - `CHUNK_INTERVAL_MS`
 - `ABORT_AFTER_CHUNKS`
 - `ABORT_RATIO`
-
-## Variants
-
-- `bun run repro`
-  - main repro, includes `Bun.serve` response streaming path
-- `bun run repro:direct`
-  - direct client-only variant, did not reproduce in my environment
