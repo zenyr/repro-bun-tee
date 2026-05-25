@@ -33,7 +33,7 @@ Current defaults are tuned for quicker repro:
 
 Current confirmed repro environment:
 
-- Bun: `1.3.11`, `1.3.12`
+- Bun: `1.3.11`, `1.3.12`, `1.3.14`, `1.4.0-canary.1+a49b308f2`
 - OS: `macOS`
 - Arch: `arm64`
 
@@ -42,6 +42,11 @@ The script also prints Bun version and platform info at startup.
 ## Expected
 
 Process exits cleanly without internal Bun stream errors.
+
+The repro treats `unhandledRejection` and `uncaughtException` as failures and
+sets `process.exitCode = 1` when they occur. This matters because affected Bun
+versions can finish the load and still emit an internal stream error such as
+`TypeError: null is not an object` before process exit.
 
 ## Core issue
 
@@ -72,6 +77,7 @@ So the current evidence suggests this is not just a generic `tee() + cancel()` i
 ## Observed in current default repro
 
 - `TypeError: null is not an object`
+- exit code `1` after the repro records the internal error
 
 ## Related real-world observation
 

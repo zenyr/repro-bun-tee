@@ -55,12 +55,20 @@ if (consumerPort === undefined) {
   throw new Error("consumer server port unavailable");
 }
 
+let internalErrorCount = 0;
+
+const recordInternalError = (label: string, error: unknown): void => {
+  internalErrorCount += 1;
+  process.exitCode = 1;
+  console.error(`[repro-bun-tee] ${label}`, error);
+};
+
 process.on("unhandledRejection", (error) => {
-  console.error("[repro-bun-tee] unhandledRejection", error);
+  recordInternalError("unhandledRejection", error);
 });
 
 process.on("uncaughtException", (error) => {
-  console.error("[repro-bun-tee] uncaughtException", error);
+  recordInternalError("uncaughtException", error);
 });
 
 const startedAt = Date.now();
@@ -77,3 +85,9 @@ log(`completed in ${Date.now() - startedAt}ms`);
 
 consumer.stop(true);
 upstreamProc.kill();
+
+await Bun.sleep(100);
+
+if (internalErrorCount > 0) {
+  log(`failed with ${internalErrorCount} internal Bun stream error(s)`);
+}

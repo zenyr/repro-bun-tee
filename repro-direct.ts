@@ -40,12 +40,20 @@ const readUpstreamPort = async (
   throw new Error(`failed to read upstream port: ${output}`);
 };
 
+let internalErrorCount = 0;
+
+const recordInternalError = (label: string, error: unknown): void => {
+  internalErrorCount += 1;
+  process.exitCode = 1;
+  console.error(`[repro-bun-tee direct] ${label}`, error);
+};
+
 process.on("unhandledRejection", (error) => {
-  console.error("[repro-bun-tee direct] unhandledRejection", error);
+  recordInternalError("unhandledRejection", error);
 });
 
 process.on("uncaughtException", (error) => {
-  console.error("[repro-bun-tee direct] uncaughtException", error);
+  recordInternalError("uncaughtException", error);
 });
 
 const upstreamProc = Bun.spawn({
@@ -69,3 +77,9 @@ await runDirectLoad(upstreamPort);
 log(`completed in ${Date.now() - startedAt}ms`);
 
 upstreamProc.kill();
+
+await Bun.sleep(100);
+
+if (internalErrorCount > 0) {
+  log(`failed with ${internalErrorCount} internal Bun stream error(s)`);
+}
